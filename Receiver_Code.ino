@@ -46,6 +46,7 @@ void Control(DataPacket received_data);
 void ResetSystem(void);
 void ToggleLeftIndicator();
 void ToggleRightIndicator();
+void ToggleBothIndicators();
 void setup() {
   Serial.begin(9600);
   radio.begin();
@@ -138,19 +139,22 @@ void Control(DataPacket received_data)
   {
     servo.write(received_data.streeing);
 
-    if (received_data.right_turn && (received_data.streeing > 115) )
+    if ((received_data.right_turn && (received_data.streeing > 115)) &&
+              (received_data.digital_ch3 == HIGH))
     {
       ToggleRightIndicator();
     }
-    else
+    else if(received_data.digital_ch3 == HIGH)
     {
       digitalWrite(RIGHT_INDICATOR, LOW);
     }
-    if (received_data.left_turn && (received_data.streeing < 65) )
+    if ((received_data.left_turn && (received_data.streeing < 65)) &&
+            (received_data.digital_ch3 == HIGH))
     { 
       ToggleLeftIndicator();
     }
-    else
+    // if all indicators blinking turned off 
+    else if(received_data.digital_ch3 == HIGH)
     {
       digitalWrite(LEFT_INDICATOR, LOW);
     }
@@ -176,6 +180,22 @@ void Control(DataPacket received_data)
     Serial.print("Head Lights: ");
     Serial.println(received_data.digital_ch1);
   }
+  // Toggling indicator lights
+  if(received_data.digital_ch3 == LOW)
+  {
+    ToggleBothIndicators();
+    Serial.print("Indicators state: ");
+    Serial.println(received_data.digital_ch3);
+
+  }
+  else
+  {
+    digitalWrite(LEFT_INDICATOR,LOW);
+    digitalWrite(RIGHT_INDICATOR,LOW);
+    Serial.print("Indicators state: ");
+    Serial.println(received_data.digital_ch3);
+  }
+
 
 
 }
@@ -185,7 +205,7 @@ void ResetSystem(void)
   digitalWrite(INB1,LOW);
   digitalWrite(INB2,LOW);
   analogWrite(PWMB,0);
-  
+
   // Resetting steering
   servo.write(90);
 
@@ -212,6 +232,17 @@ void ToggleRightIndicator()
   delay(50);
   digitalWrite(RIGHT_INDICATOR,LOW);
   delay(50);
+}
+
+void ToggleBothIndicators()
+{
+  digitalWrite(LEFT_INDICATOR,HIGH);
+  digitalWrite(RIGHT_INDICATOR,HIGH);
+  delay(50);
+  digitalWrite(LEFT_INDICATOR,LOW);
+  digitalWrite(RIGHT_INDICATOR,LOW);
+  delay(50);
+
 }
 
 
