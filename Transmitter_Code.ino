@@ -80,6 +80,7 @@ void ProcessData(DataPacket* data)
     uint16_t AnalogValA6 = analogRead(A6);
     uint16_t AnalogValA7 = analogRead(A7);
     bool DigitalValCH1 = digitalRead(DIGITAL_CH1);
+    bool DigitalValCH3 = digitalRead(DIGITAL_CH3);
 
     // Throttle
     if(AnalogValA6 < 287)
@@ -88,6 +89,14 @@ void ProcessData(DataPacket* data)
       data->backward = false;
       uint8_t speed = (-1.90*AnalogValA6 + 551.86);
       data->throttle = speed;
+      if(AnalogValA6<=155)
+      { 
+        // Overide the value to avoid the glitch
+        data->throttle = 255;
+      }
+      Serial.print(AnalogValA6);
+      Serial.print(", ");
+      Serial.println(data->throttle);
     }
     else if(AnalogValA6 > 295)
     {
@@ -95,6 +104,14 @@ void ProcessData(DataPacket* data)
       data->backward = true;
       uint8_t speed = (3.03*AnalogValA6 - 898.57);
       data->throttle = speed;
+      if(AnalogValA6>=382)
+      { 
+        // Overide the value to avoid the glitch
+        data->throttle = 255;
+      }
+      Serial.print(AnalogValA6);
+      Serial.print(", ");
+      Serial.println(data->throttle);
     }
     else 
     {
@@ -127,6 +144,7 @@ void ProcessData(DataPacket* data)
     }
 
     data->digital_ch1 = DigitalValCH1;
+    data->digital_ch3 = DigitalValCH3;
   
 }
 
