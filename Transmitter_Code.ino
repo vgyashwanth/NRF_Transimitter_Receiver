@@ -12,6 +12,11 @@
 #define DIGITAL_CH2 7
 #define DIGITAL_CH3 9
 #define DIGITAL_CH4 8
+#define THROTTLE A6
+#define STEERING A7
+#define HEAD_POT A5
+#define TOP_TRIM_POT A4
+#define DOWN_TRIM_POT A3
 
 RF24 radio(CE_PIN, CSN_PIN); // CE, CS
 // address of the nodes
@@ -71,17 +76,18 @@ void loop()
   ProcessData(&data);
   radio.write(&data, sizeof(data));
   
-  
 }
 
 void ProcessData(DataPacket* data)
 {
 
-    uint16_t AnalogValA6 = analogRead(A6);
-    uint16_t AnalogValA7 = analogRead(A7);
+    uint16_t AnalogValA6 = analogRead(THROTTLE);
+    uint16_t AnalogValA7 = analogRead(STEERING);
+    uint16_t AnalogValA5 = analogRead(HEAD_POT);
     bool DigitalValCH1 = digitalRead(DIGITAL_CH1);
     bool DigitalValCH3 = digitalRead(DIGITAL_CH3);
 
+    
     // Throttle
     if(AnalogValA6 < 287)
     {
@@ -139,7 +145,23 @@ void ProcessData(DataPacket* data)
     {
       data->right_turn = false;
       data->left_turn = false;
-      data->streeing = 90;
+
+       // Steering Trim
+      if(((int16_t)(600-(int16_t)AnalogValA5)>0) && (AnalogValA5 > 200))
+      {
+        data->head_pot = (uint8_t)((600-AnalogValA5)/10);
+        data->streeing = (90+data->head_pot);
+      }
+      else if(((int16_t)((int16_t)AnalogValA5-600)>0) && (AnalogValA5 < 1000))
+      {
+        data->head_pot = (uint8_t)((AnalogValA5-600)/10);
+        data->streeing = (90-data->head_pot);
+      }
+      else
+      {
+        data->head_pot = (uint8_t)0; 
+        data->streeing = (90+data->head_pot);
+      }
       
     }
 
