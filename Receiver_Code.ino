@@ -48,8 +48,12 @@ void ToggleRightIndicator();
 void ToggleBothIndicators();
 void setup() {
   Serial.begin(9600);
+  // NRF Module Settings
   radio.begin();
-  radio.setChannel(100); // 2400MHz + 100MHz
+  // (2400MHz + 100MHz) Frequency Channel
+  // both Transimitter and Receiver should be on same channel
+  // helps when multiple NRF modules communicating in same space
+  radio.setChannel(100); 
   radio.setDataRate(RF24_250KBPS);
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_MIN);
