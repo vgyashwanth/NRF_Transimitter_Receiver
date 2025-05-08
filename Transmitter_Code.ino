@@ -50,8 +50,7 @@ void setup()
   // !!!Warning!!! dont remove this 
   // lead to Hardware Error
   analogReference(EXTERNAL); // use AREF for reference voltage
-
-  // NRF Settings
+  // NRF Module Settings
   radio.begin();
   // (2400MHz + 100MHz) Frequency Channel
   // both Transimitter and Receiver should be on same channel
