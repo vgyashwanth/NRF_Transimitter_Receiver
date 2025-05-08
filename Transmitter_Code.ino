@@ -53,7 +53,7 @@ void setup()
 
   // NRF Settings
   radio.begin();
-  radio.setChannel(100);
+  radio.setChannel(100); // 2400MHz + 100MHz
   radio.setDataRate(RF24_250KBPS);
   radio.openWritingPipe(address);
   radio.setPALevel(RF24_PA_MIN);
