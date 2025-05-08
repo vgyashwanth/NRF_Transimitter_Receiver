@@ -49,7 +49,7 @@ void ToggleBothIndicators();
 void setup() {
   Serial.begin(9600);
   radio.begin();
-  radio.setChannel(100);
+  radio.setChannel(100); // 2400MHz + 100MHz
   radio.setDataRate(RF24_250KBPS);
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_MIN);
