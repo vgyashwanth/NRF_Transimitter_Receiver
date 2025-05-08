@@ -26,7 +26,7 @@ const byte address[6] = "00001";
 //Data packet
 struct DataPacket
 {
-  uint8_t throttle;
+  uint16_t throttle;
   uint8_t streeing;
   uint8_t head_pot;
   uint8_t down_trim_pot;
@@ -93,37 +93,19 @@ void ProcessData(DataPacket* data)
     {
       data->forward = true;
       data->backward = false;
-      uint8_t speed = (-1.90*AnalogValA6 + 551.86);
-      data->throttle = speed;
-      if(AnalogValA6<=155)
-      { 
-        // Overide the value to avoid the glitch
-        data->throttle = 255;
-      }
-      Serial.print(AnalogValA6);
-      Serial.print(", ");
-      Serial.println(data->throttle);
+      data->throttle = (uint16_t)(map(AnalogValA6,155, 287, 2000, 1500));
     }
     else if(AnalogValA6 > 295)
     {
       data->forward = false;
       data->backward = true;
-      uint8_t speed = (3.03*AnalogValA6 - 898.57);
-      data->throttle = speed;
-      if(AnalogValA6>=382)
-      { 
-        // Overide the value to avoid the glitch
-        data->throttle = 255;
-      }
-      Serial.print(AnalogValA6);
-      Serial.print(", ");
-      Serial.println(data->throttle);
+      data->throttle = (uint16_t)(map(AnalogValA6,295, 382, 1500, 1000));
     }
     else 
     {
       data->forward = false;
       data->backward = false;
-      data->throttle = 0;
+      data->throttle = 1500; // stop the motor
     }
 
     // Steering 
