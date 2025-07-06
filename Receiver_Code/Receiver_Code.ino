@@ -7,7 +7,8 @@
 
 #define CE_PIN         2
 #define CSN_PIN        4
-
+#define INA1           7
+#define INA2           8
 #define MOTOR_PIN       3
 #define SERVO_PIN      10
 #define HEAD_LIGHTS    A0
@@ -17,7 +18,7 @@
 #define RIGHT_INDICATOR A3
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 Servo servo;  // create servo object to control a servo
-Servo motor;  // for controlling the esc of the motor
+// Servo motor;  // for controlling the esc of the motor
 
 const byte address[6] = "00001";
 volatile bool left_indicator_state = 0;
@@ -63,16 +64,18 @@ void setup() {
   // Hardware Setup
 
   servo.attach(SERVO_PIN);
-  motor.attach(MOTOR_PIN);
+  pinMode(MOTOR_PIN,OUTPUT);
   pinMode(HEAD_LIGHTS, OUTPUT);
   pinMode(BOOSTER_LIGHTS, OUTPUT);
   pinMode(RED_LIGHTS, OUTPUT);
   pinMode(LEFT_INDICATOR, OUTPUT);
   pinMode(RIGHT_INDICATOR, OUTPUT);
+  pinMode(INA1,OUTPUT);
+  pinMode(INA2,OUTPUT);
 
-  // Motor ESC Calibration
-  motor.writeMicroseconds(1500);
-  delay(2000);
+  // // Motor ESC Calibration
+  // motor.writeMicroseconds(1500);
+  // delay(2000);
   
 }
 
@@ -97,8 +100,13 @@ void Control(DataPacket received_data)
   // Throttle
   if(received_data.forward && !(received_data.backward))
   {
-  
-    motor.writeMicroseconds(received_data.throttle);
+    // setting up the driver pins
+    digitalWrite(INA1,HIGH);
+    digitalWrite(INA2,LOW);
+    
+    // feeding the PWM to Motor pin
+    received_data.throttle = (uint16_t)(map(received_data.throttle,1500, 2000, 0, 253));
+    analogWrite(MOTOR_PIN, received_data.throttle);
     // Setting up the Blue Lights
     if(received_data.throttle > 1900)
     {
@@ -116,7 +124,13 @@ void Control(DataPacket received_data)
   else if (!(received_data.forward) && received_data.backward)
   {
    
-    motor.writeMicroseconds(received_data.throttle);
+    // setting up the driver pins
+    digitalWrite(INA1,LOW);
+    digitalWrite(INA2,HIGH);
+    
+    // feeding the PWM to Motor pin
+    received_data.throttle = (uint16_t)(map(received_data.throttle, 1500, 1000, 0, 254));
+    analogWrite(MOTOR_PIN, received_data.throttle);
     // Turn off the booster lights if it is on already
     // Turn on the red lights
     digitalWrite(BOOSTER_LIGHTS,LOW);
@@ -127,7 +141,11 @@ void Control(DataPacket received_data)
   }
   else
   {
-    motor.writeMicroseconds(1500); // stop the motor
+    // setting up the driver pins
+    digitalWrite(INA1,LOW);
+    digitalWrite(INA2,LOW);
+
+    analogWrite(MOTOR_PIN, 0); // stop the motor
     // Turn off the booster lights if it is on already
     // Turn off the red lights if it is on already
     digitalWrite(BOOSTER_LIGHTS,LOW);
@@ -204,7 +222,11 @@ void Control(DataPacket received_data)
 void ResetSystem(void)
 {
  
-  motor.writeMicroseconds(1500); // stop the motor
+  // setting up the driver pins
+  digitalWrite(INA1,LOW);
+  digitalWrite(INA2,LOW);
+
+  analogWrite(MOTOR_PIN,0); // stop the motor
 
   // Resetting steering
   servo.write(90);
