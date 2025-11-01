@@ -90,6 +90,7 @@ void ProcessData(DataPacket* data)
     bool DigitalValCH1 = digitalRead(DIGITAL_CH1);
     bool DigitalValCH2 = digitalRead(DIGITAL_CH2);
     bool DigitalValCH3 = digitalRead(DIGITAL_CH3);
+    bool DigitalValCH4 = digitalRead(DIGITAL_CH4);
     
 
     
@@ -157,6 +158,7 @@ void ProcessData(DataPacket* data)
     data->digital_ch1 = DigitalValCH1;
     data->digital_ch2 = DigitalValCH2;
     data->digital_ch3 = DigitalValCH3;
+    data->digital_ch4 = DigitalValCH4;
 
     
     

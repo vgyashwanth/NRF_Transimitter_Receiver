@@ -21,12 +21,18 @@
 #define SPOILER_UP_ANGLE (90-4)
 #define SPOILER_DOWN_ANGLE (90+21)
 
+// Steering related variables
+#define STEERING_UPPER_BOUND (90+23)
+#define STREEING_LOWER_BOUND (90-23)
+
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 Servo servo;  // create servo object to control a servo
 Servo motor;  // for controlling the esc of the motor
 Servo spoiler; // for Spoiler
 
 const byte address[6] = "00001";
+
+bool IsBoosterOnFirstTime = true;
 
 //Data packet
 struct DataPacket
@@ -49,6 +55,8 @@ struct DataPacket
 void Control(DataPacket received_data);
 void ResetSystem(void);
 void SpoilerOn(bool On);
+void ToggleBoosterLight(void);
+void TurnOnParkingLights(void);
 
 
 
@@ -107,25 +115,47 @@ void loop()
 void Control(DataPacket received_data)
 {
   // Throttle
+
+  if(received_data.digital_ch4 == LOW)
+  {
+      
+      TurnOnParkingLights();
+      return ; // dont do further processing
+
+  }
+
   if(received_data.forward && !(received_data.backward))
   {
-  
+    
     // Setting up the Blue Lights
-    if(received_data.throttle > 1900)
-    {
-        digitalWrite(BOOSTER_LIGHTS,HIGH);
-        // SpoilerOn(true);
+    if(received_data.throttle > 1800)
+    {   
+
+        if(received_data.digital_ch3 == LOW)
+        {
+          if(IsBoosterOnFirstTime)
+          {
+            ToggleBoosterLight();
+            IsBoosterOnFirstTime = false;
+          }
+          digitalWrite(BOOSTER_LIGHTS,HIGH);
+          // supply PWM MAX to motor
+          motor.writeMicroseconds(2000);
+        }
+        else 
+        {
+          // supply PWM MAX to motor
+          motor.writeMicroseconds(1800);
+        } 
     }
     else
     {
+        IsBoosterOnFirstTime = true;
         digitalWrite(BOOSTER_LIGHTS,LOW);
+        // supply PWM to motor
+        motor.writeMicroseconds(received_data.throttle);
         // SpoilerOn(false);
     }
-    // supply PWM to motor
-    motor.writeMicroseconds(received_data.throttle);
-
-    // Turn off the red lights if it is on already
-    digitalWrite(RED_LIGHTS,LOW);
     Serial.print("Throttle : ");
     Serial.println(received_data.throttle);
   }
@@ -147,7 +177,7 @@ void Control(DataPacket received_data)
     // Turn off the booster lights if it is on already
     // Turn off the red lights if it is on already
     digitalWrite(BOOSTER_LIGHTS,LOW);
-    digitalWrite(RED_LIGHTS,LOW);
+    // digitalWrite(RED_LIGHTS,LOW);
     Serial.print("Throttle : ");
     Serial.println(received_data.throttle);
   }
@@ -155,7 +185,19 @@ void Control(DataPacket received_data)
   // Steering
   if(received_data.right_turn || received_data.left_turn)
   {
-    servo.write(received_data.streeing);
+      // Allow only valid streeing angle
+    if( (received_data.streeing <= STEERING_UPPER_BOUND) && 
+    (received_data.streeing >= STREEING_LOWER_BOUND))
+    {
+        servo.write(received_data.streeing);
+    }
+    else
+    {
+      // any invalid angle
+      // keep the Servo at 90 to avoid some erros values which cause servo mis-alinged.
+      servo.write(90);
+    }
+    
 
     // if ((received_data.right_turn && (received_data.streeing > 115)) &&
     //           (received_data.digital_ch3 == HIGH))
@@ -187,24 +229,38 @@ void Control(DataPacket received_data)
   }
   if((received_data.digital_ch1 == LOW) && (received_data.digital_ch2 == HIGH))
   {
-    digitalWrite(HEAD_LIGHTS,HIGH);
-    digitalWrite(HEAD_BAR_LIGHTS,LOW);
+    digitalWrite(HEAD_LIGHTS,LOW);
+    digitalWrite(HEAD_BAR_LIGHTS,HIGH);
+    // Turn OFF it is Already On, only if the car is running forward or Rest
+    if(((received_data.forward) && !(received_data.backward)) ||
+  (!(received_data.forward) && !(received_data.backward)))
+    {
+      digitalWrite(RED_LIGHTS,LOW);
+    }
     Serial.print("Head Lights: ");
-    Serial.println(received_data.digital_ch1);
+    Serial.println("HEAD Bar Light Turned ON");
 
   }
   else if((received_data.digital_ch1 == HIGH) && (received_data.digital_ch2 == LOW))
   {
     digitalWrite(HEAD_LIGHTS,HIGH);
+    // Turn on the RED LED if the HEAD LIGHTS TURNED ON.
+    digitalWrite(RED_LIGHTS,HIGH);
     digitalWrite(HEAD_BAR_LIGHTS,HIGH);
     Serial.print("Head Lights: ");
-    Serial.println(received_data.digital_ch1);
+    Serial.println("Both Head Lights Turned On");
   }
   else
   {
     // Turn off Both Head Lights
     digitalWrite(HEAD_LIGHTS,LOW);
     digitalWrite(HEAD_BAR_LIGHTS,LOW);
+    // Turn OFF it is Already On, only if the car is running forward or rest
+    if(((received_data.forward) && !(received_data.backward)) ||
+    (!(received_data.forward) && !(received_data.backward)))
+    {
+      digitalWrite(RED_LIGHTS,LOW);
+    }
     Serial.println("Both Head Lights Turned Off");
 
   }
@@ -271,4 +327,31 @@ void SpoilerOn(bool On)
     }
   }
   
+}
+void ToggleBoosterLight(void)
+{
+
+  for(uint8_t i = 0; i<=8;i++)
+  {
+       digitalWrite(BOOSTER_LIGHTS,HIGH);
+       delay(65);
+       digitalWrite(BOOSTER_LIGHTS,LOW);
+       delay(50);
+
+  }
+
+}
+
+void TurnOnParkingLights(void)
+{
+      motor.writeMicroseconds(1500); // stop the motor
+      servo.write(90); // steering normal
+      digitalWrite(HEAD_LIGHTS, LOW); // head lights LOW.
+      digitalWrite(HEAD_BAR_LIGHTS,HIGH);
+      digitalWrite(RED_LIGHTS,HIGH);
+      delay(700);
+      digitalWrite(HEAD_BAR_LIGHTS,LOW);
+      digitalWrite(RED_LIGHTS,LOW);
+      delay(700);
+
 }
