@@ -88,7 +88,9 @@ void ProcessData(DataPacket* data)
     uint16_t AnalogValA7 = analogRead(STEERING);
     uint16_t AnalogValA5 = analogRead(HEAD_POT);
     bool DigitalValCH1 = digitalRead(DIGITAL_CH1);
+    bool DigitalValCH2 = digitalRead(DIGITAL_CH2);
     bool DigitalValCH3 = digitalRead(DIGITAL_CH3);
+    
 
     
     
@@ -117,14 +119,14 @@ void ProcessData(DataPacket* data)
     {
       data->right_turn = true;
       data->left_turn = false;
-      uint8_t angle = (uint8_t)(map(AnalogValA7,550, 325, (90+data->head_pot), 90+45));
+      uint8_t angle = (uint8_t)(map(AnalogValA7,550, 325, (90+data->head_pot), 90-22));
       data->streeing = angle;
     }
     else if(AnalogValA7 > 565)
     {
       data->right_turn = false;
       data->left_turn = true;
-      uint8_t angle = (uint8_t)(map(AnalogValA7,565, 745, (90+data->head_pot), 90-45));
+      uint8_t angle = (uint8_t)(map(AnalogValA7,565, 745, (90+data->head_pot), 90+22));
       data->streeing = angle;
     }
     else 
@@ -136,12 +138,12 @@ void ProcessData(DataPacket* data)
       if(((int16_t)(600-(int16_t)AnalogValA5)>0) && (AnalogValA5 > 200))
       {
         data->head_pot = (uint8_t)((600-AnalogValA5)/10);
-        data->streeing = (90+data->head_pot);
+        data->streeing = (90-data->head_pot);
       }
       else if(((int16_t)((int16_t)AnalogValA5-600)>0) && (AnalogValA5 < 1000))
       {
         data->head_pot = (uint8_t)((AnalogValA5-600)/10);
-        data->streeing = (90-data->head_pot);
+        data->streeing = (90+data->head_pot);
       }
       else
       {
@@ -151,14 +153,12 @@ void ProcessData(DataPacket* data)
       
     }
 
+    // Digital Values
     data->digital_ch1 = DigitalValCH1;
+    data->digital_ch2 = DigitalValCH2;
     data->digital_ch3 = DigitalValCH3;
 
     
     
   
 }
-
-
-
-

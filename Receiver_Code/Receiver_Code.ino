@@ -8,20 +8,25 @@
 #define CE_PIN         2
 #define CSN_PIN        4
 
-#define MOTOR_PIN       3
-#define SERVO_PIN      10
-#define HEAD_LIGHTS    A0
-#define BOOSTER_LIGHTS A1
-#define RED_LIGHTS     A2
-#define LEFT_INDICATOR A4
-#define RIGHT_INDICATOR A3
+#define MOTOR_PIN        3
+#define SERVO_PIN       10
+#define SPOILER_PIN      9
+#define HEAD_LIGHTS     A1
+#define HEAD_BAR_LIGHTS A2
+#define BOOSTER_LIGHTS  A3
+#define RED_LIGHTS      A4
+
+
+// Spolier related variables
+#define SPOILER_UP_ANGLE (90-4)
+#define SPOILER_DOWN_ANGLE (90+21)
+
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 Servo servo;  // create servo object to control a servo
 Servo motor;  // for controlling the esc of the motor
+Servo spoiler; // for Spoiler
 
 const byte address[6] = "00001";
-volatile bool left_indicator_state = 0;
-volatile bool right_indicator_state = 0;
 
 //Data packet
 struct DataPacket
@@ -43,13 +48,17 @@ struct DataPacket
 
 void Control(DataPacket received_data);
 void ResetSystem(void);
-void ToggleLeftIndicator();
-void ToggleRightIndicator();
-void ToggleBothIndicators();
+void SpoilerOn(bool On);
+
+
+
 void setup() {
+
   Serial.begin(9600);
+
   // NRF Module Settings
   radio.begin();
+
   // (2400MHz + 100MHz) Frequency Channel
   // both Transimitter and Receiver should be on same channel
   // helps when multiple NRF modules communicating in same space
@@ -61,14 +70,17 @@ void setup() {
   radio.startListening();
  
   // Hardware Setup
-
   servo.attach(SERVO_PIN);
   motor.attach(MOTOR_PIN);
+  spoiler.attach(SPOILER_PIN);
+
   pinMode(HEAD_LIGHTS, OUTPUT);
+  pinMode(HEAD_BAR_LIGHTS, OUTPUT);
   pinMode(BOOSTER_LIGHTS, OUTPUT);
   pinMode(RED_LIGHTS, OUTPUT);
-  pinMode(LEFT_INDICATOR, OUTPUT);
-  pinMode(RIGHT_INDICATOR, OUTPUT);
+
+  // Spoiler Initial Vlaue
+  spoiler.write(SPOILER_DOWN_ANGLE);
 
   // Motor ESC Calibration
   motor.writeMicroseconds(1500);
@@ -98,16 +110,20 @@ void Control(DataPacket received_data)
   if(received_data.forward && !(received_data.backward))
   {
   
-    motor.writeMicroseconds(received_data.throttle);
     // Setting up the Blue Lights
     if(received_data.throttle > 1900)
     {
         digitalWrite(BOOSTER_LIGHTS,HIGH);
+        // SpoilerOn(true);
     }
     else
     {
         digitalWrite(BOOSTER_LIGHTS,LOW);
+        // SpoilerOn(false);
     }
+    // supply PWM to motor
+    motor.writeMicroseconds(received_data.throttle);
+
     // Turn off the red lights if it is on already
     digitalWrite(RED_LIGHTS,LOW);
     Serial.print("Throttle : ");
@@ -141,25 +157,25 @@ void Control(DataPacket received_data)
   {
     servo.write(received_data.streeing);
 
-    if ((received_data.right_turn && (received_data.streeing > 115)) &&
-              (received_data.digital_ch3 == HIGH))
-    {
-      ToggleRightIndicator();
-    }
-    else if(received_data.digital_ch3 == HIGH)
-    {
-      digitalWrite(RIGHT_INDICATOR, LOW);
-    }
-    if ((received_data.left_turn && (received_data.streeing < 65)) &&
-            (received_data.digital_ch3 == HIGH))
-    { 
-      ToggleLeftIndicator();
-    }
-    // if all indicators blinking turned off 
-    else if(received_data.digital_ch3 == HIGH)
-    {
-      digitalWrite(LEFT_INDICATOR, LOW);
-    }
+    // if ((received_data.right_turn && (received_data.streeing > 115)) &&
+    //           (received_data.digital_ch3 == HIGH))
+    // {
+    //   ToggleRightIndicator();
+    // }
+    // else if(received_data.digital_ch3 == HIGH)
+    // {
+    //   digitalWrite(RIGHT_INDICATOR, LOW);
+    // }
+    // if ((received_data.left_turn && (received_data.streeing < 65)) &&
+    //         (received_data.digital_ch3 == HIGH))
+    // { 
+    //   ToggleLeftIndicator();
+    // }
+    // // if all indicators blinking turned off 
+    // else if(received_data.digital_ch3 == HIGH)
+    // {
+    //   digitalWrite(LEFT_INDICATOR, LOW);
+    // }
     Serial.print("Steering: ");
     Serial.println(received_data.streeing);
   }
@@ -169,36 +185,46 @@ void Control(DataPacket received_data)
     Serial.print("Steering: ");
     Serial.println(received_data.streeing);
   }
-  if(received_data.digital_ch1 == LOW)
+  if((received_data.digital_ch1 == LOW) && (received_data.digital_ch2 == HIGH))
   {
     digitalWrite(HEAD_LIGHTS,HIGH);
+    digitalWrite(HEAD_BAR_LIGHTS,LOW);
     Serial.print("Head Lights: ");
     Serial.println(received_data.digital_ch1);
 
   }
-  else
+  else if((received_data.digital_ch1 == HIGH) && (received_data.digital_ch2 == LOW))
   {
-    digitalWrite(HEAD_LIGHTS,LOW);
+    digitalWrite(HEAD_LIGHTS,HIGH);
+    digitalWrite(HEAD_BAR_LIGHTS,HIGH);
     Serial.print("Head Lights: ");
     Serial.println(received_data.digital_ch1);
   }
-  // Toggling indicator lights
+  else
+  {
+    // Turn off Both Head Lights
+    digitalWrite(HEAD_LIGHTS,LOW);
+    digitalWrite(HEAD_BAR_LIGHTS,LOW);
+    Serial.println("Both Head Lights Turned Off");
+
+  }
+  // Turn on/off the Spolier
+
   if(received_data.digital_ch3 == LOW)
   {
-    ToggleBothIndicators();
-    Serial.print("Indicators state: ");
-    Serial.println(received_data.digital_ch3);
+    // Turn on the Spoiler
+    Serial.print("Spoiler Turned On: ");
+    Serial.println(!received_data.digital_ch3);
 
   }
   else
   {
-    digitalWrite(LEFT_INDICATOR,LOW);
-    digitalWrite(RIGHT_INDICATOR,LOW);
-    Serial.print("Indicators state: ");
-    Serial.println(received_data.digital_ch3);
+    // Turn off the Spoiler
+    Serial.print("Spoiler Turned Off: ");
+    Serial.println(!received_data.digital_ch3);
   }
 
-
+  SpoilerOn(!(received_data.digital_ch3));
 
 }
 void ResetSystem(void)
@@ -211,40 +237,38 @@ void ResetSystem(void)
 
   // Resetting all Lights
   digitalWrite(HEAD_LIGHTS,LOW);
+  digitalWrite(HEAD_BAR_LIGHTS, LOW);
   digitalWrite(BOOSTER_LIGHTS,LOW);
   digitalWrite(RED_LIGHTS,LOW);
-  digitalWrite(LEFT_INDICATOR,LOW);
-  digitalWrite(RIGHT_INDICATOR,LOW);
+  // Turn off the Spolier
+  SpoilerOn(false);
 
 }
 
-void ToggleLeftIndicator()
-{
-  digitalWrite(LEFT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(LEFT_INDICATOR,LOW);
-  delay(50);
+void SpoilerOn(bool On)
+{   
+  // Read the Current Spoiler Postion
+  uint8_t current_angle = spoiler.read();
+  Serial.print("Current Angle: ");
+  Serial.println(current_angle);
+  
+  if(On)
+  {
+
+    for(uint8_t angle = current_angle; angle>=SPOILER_UP_ANGLE; angle--)
+    {
+        spoiler.write(angle);
+        delay(5);
+    }
+
+  }
+  else
+  {
+    for(uint8_t angle = current_angle; angle<=SPOILER_DOWN_ANGLE; angle++)
+    {
+        spoiler.write(angle);
+        delay(5);
+    }
+  }
+  
 }
-
-void ToggleRightIndicator()
-{
-  digitalWrite(RIGHT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(RIGHT_INDICATOR,LOW);
-  delay(50);
-}
-
-void ToggleBothIndicators()
-{
-  digitalWrite(LEFT_INDICATOR,HIGH);
-  digitalWrite(RIGHT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(LEFT_INDICATOR,LOW);
-  digitalWrite(RIGHT_INDICATOR,LOW);
-  delay(50);
-
-}
-
-
-
-
