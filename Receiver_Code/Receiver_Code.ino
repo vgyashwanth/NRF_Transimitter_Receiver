@@ -118,7 +118,7 @@ void Control(DataPacket received_data)
 
   if(received_data.digital_ch4 == LOW)
   {
-      
+      servo.write(received_data.streeing); // steering normal
       TurnOnParkingLights();
       return ; // dont do further processing
 
@@ -146,6 +146,8 @@ void Control(DataPacket received_data)
         {
           // supply PWM MAX to motor
           motor.writeMicroseconds(1800);
+          // Turn off the Booster Lights if it is already ON
+          digitalWrite(BOOSTER_LIGHTS,LOW);
         } 
     }
     else
@@ -345,13 +347,12 @@ void ToggleBoosterLight(void)
 void TurnOnParkingLights(void)
 {
       motor.writeMicroseconds(1500); // stop the motor
-      servo.write(90); // steering normal
       digitalWrite(HEAD_LIGHTS, LOW); // head lights LOW.
       digitalWrite(HEAD_BAR_LIGHTS,HIGH);
       digitalWrite(RED_LIGHTS,HIGH);
-      delay(700);
+      delay(600);
       digitalWrite(HEAD_BAR_LIGHTS,LOW);
       digitalWrite(RED_LIGHTS,LOW);
-      delay(700);
+      delay(600);
 
 }
