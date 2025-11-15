@@ -1,0 +1,7 @@
+1500 to 1000 reverse direction
+1500 to 2000 f0rward direction
+
+receiver pin mapping
+pwm  - D3,D5,D6,D9,D10 - In the same direction of Arduino nano pin map
+io sequence  - A7,6,5,4,3,2,1,0, 3V3, D8,D7,GNG,GNG,GNG
+spoiler angle ---> up = 90-5, down = 90+20;
