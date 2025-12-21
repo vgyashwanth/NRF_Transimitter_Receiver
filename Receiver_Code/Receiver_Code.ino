@@ -55,7 +55,7 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #define UPDATE_VALUE  1
 
 // --- FUNCTION PROTOTYPES ---
-void SetUpTftDisplay(void);
+void SetUpTftDisplayLayout(void);
 void drawHeader(const char* title);
 void drawLayoutLines();
 void TankLevel(int tankId, uint8_t percentage, bool IsDataUpdate);
@@ -66,125 +66,74 @@ void GasLevel(uint8_t level, bool IsDataUpdate);
 
 // NRF Module related Variables
 
+struct DataPacket
+{
+  uint8_t tank1_depth;
+  uint8_t tank2_depth;
+  uint8_t temperature;
+  uint8_t humidity;
+};
 
 #define CE_PIN         2
 #define CSN_PIN        4
 
-// #define MOTOR_PIN       3
-// #define SERVO_PIN      10
-// #define HEAD_LIGHTS    A0
-// #define BOOSTER_LIGHTS A1
-// #define RED_LIGHTS     A2
-// #define LEFT_INDICATOR A4
-// #define RIGHT_INDICATOR A3
+
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
-// Servo servo;  // create servo object to control a servo
-// Servo motor;  // for controlling the esc of the motor
 
 const byte address[6] = "00001";
-// volatile bool left_indicator_state = 0;
-// volatile bool right_indicator_state = 0;
 
-//Data packet
-// struct DataPacket
-// {
-//   uint16_t throttle;
-//   uint8_t streeing;
-//   uint8_t head_pot;
-//   uint8_t down_trim_pot;
-//   uint8_t top_trim_pot;
-//   uint8_t digital_ch1 : 1;
-//   uint8_t digital_ch2 : 1;
-//   uint8_t digital_ch3 : 1;
-//   uint8_t digital_ch4 : 1;
-//   uint8_t left_turn   : 1;
-//   uint8_t right_turn  : 1;
-//   uint8_t forward     : 1;
-//   uint8_t backward    : 1;
-// };
+void SetUpNrfModule(void);
+void SystemDisconnected(void);
 
-// void Control(DataPacket received_data);
-// void ResetSystem(void);
-// void ToggleLeftIndicator();
-// void ToggleRightIndicator();
-// void ToggleBothIndicators();
-   void SetUpNrfModule(void);
 
-void setup() {
+/* System Variables*/
 
+#define ALARM A3
+
+
+
+
+void setup()
+{
 
   Serial.begin(9600);
 
   // TFT Module Setup
-  SetUpTftDisplay();
+  tft.init(240, 320);
+  SetUpTftDisplayLayout();
 
   // NRF Module Setup
-  // SetUpNrfModule();
+  SetUpNrfModule();
 
-
-
- 
   // Hardware Setup
+  pinMode(ALARM,OUTPUT);
 
-  // servo.attach(SERVO_PIN);
-  // motor.attach(MOTOR_PIN);
-  // pinMode(HEAD_LIGHTS, OUTPUT);
-  // pinMode(BOOSTER_LIGHTS, OUTPUT);
-  // pinMode(RED_LIGHTS, OUTPUT);
-  // pinMode(LEFT_INDICATOR, OUTPUT);
-  // pinMode(RIGHT_INDICATOR, OUTPUT);
-
-  // // Motor ESC Calibration
-  // motor.writeMicroseconds(1500);
-  // delay(2000);
-  
 }
 
 void loop()
 {
+  struct DataPacket received_data;
 
-  // --- Simulation/Update ---
-  static uint8_t simulatedTank1 = 100;
-  static uint8_t simulatedTank2 = 5;
-  static uint8_t simulatedTemp = 20;
-  static int simulatedGas = 15;
-
-  // Tank 1: Decreasing
-  simulatedTank1 -= 5;
-  if (simulatedTank1 < 5) simulatedTank1 = 100;
-
-    simulatedTank2 += 5;
-  if (simulatedTank2 > 99) simulatedTank2 = 5;
-  
-  // Gas: Increasing
-  simulatedGas += 1;
-  if (simulatedGas > 80) simulatedGas = 5;
-
-  simulatedTemp +=1;
-  if(simulatedTemp > 35)
+  if (radio.available())
   {
-    simulatedTemp = 20;
+    radio.read(&received_data, sizeof(DataPacket));
+  
   }
-  TankLevel(1, simulatedTank1, UPDATE_VALUE );
-  TankLevel(2, simulatedTank2, UPDATE_VALUE);
-  Temperature(simulatedTemp, UPDATE_VALUE);
-  GasLevel(simulatedGas, UPDATE_VALUE);
+  else
+  {
+    Serial.println("System Disconnected");
+    SystemDisconnected();
+    tone(ALARM, 1535,500);
+    delay(1000);
+    return;
+  }
+
+  TankLevel(1, received_data.tank1_depth, UPDATE_VALUE );
+  TankLevel(2, received_data.tank2_depth, UPDATE_VALUE);
+  Temperature(received_data.temperature, UPDATE_VALUE);
+  GasLevel(received_data.humidity, UPDATE_VALUE);
   delay(200);
 
-
-  
-  // if (radio.available()) 
-  // {
-  //   char text[32] = {0};
-  //   radio.read(&text, sizeof(text));
-  //   Serial.println(text);
-  //   delay(2000);
-  // }
-  // else
-  // { 
-  //   Serial.println("System reset");
-  //   //ResetSystem();
-  // }
 }
 
 // Tft Display related function definations
@@ -193,12 +142,10 @@ void loop()
 // === GUI DRAWING FUNCTIONS ===========================================
 // =====================================================================
 
-void SetUpTftDisplay(void)
+void SetUpTftDisplayLayout(void)
 {
 
-  tft.init(240, 320); 
-  tft.setRotation(1); 
-  
+  tft.setRotation(1);
   tft.fillScreen(MAIN_BG_COLOR); 
 
   drawHeader("    MONITORING SYSTEM");
@@ -398,7 +345,7 @@ void Temperature(uint8_t temp, bool IsDataUpdate) {
 /**
  * Draws or updates the Gas Level Panel (Bottom Right).
  */
-void GasLevel(int level, bool IsDataUpdate) {
+void GasLevel(uint8_t level, bool IsDataUpdate) {
   int x = PANEL_W;
   int y = HEADER_H + PANEL_H;
     // --- Radial Gauge (Simplified Half Circle) ---
@@ -495,164 +442,187 @@ void SetUpNrfModule(void)
   radio.setDataRate(RF24_250KBPS);
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_MIN);
-  //radio.setPayloadSize(sizeof(DataPacket));
+  radio.setPayloadSize(sizeof(DataPacket));
   radio.startListening();
 
 }
 
-// void Control(DataPacket received_data)
-// {
-//   // Throttle
-//   if(received_data.forward && !(received_data.backward))
-//   {
-  
-//     motor.writeMicroseconds(received_data.throttle);
-//     // Setting up the Blue Lights
-//     if(received_data.throttle > 1900)
-//     {
-//         digitalWrite(BOOSTER_LIGHTS,HIGH);
-//     }
-//     else
-//     {
-//         digitalWrite(BOOSTER_LIGHTS,LOW);
-//     }
-//     // Turn off the red lights if it is on already
-//     digitalWrite(RED_LIGHTS,LOW);
-//     Serial.print("Throttle : ");
-//     Serial.println(received_data.throttle);
-//   }
-//   else if (!(received_data.forward) && received_data.backward)
-//   {
-   
-//     motor.writeMicroseconds(received_data.throttle);
-//     // Turn off the booster lights if it is on already
-//     // Turn on the red lights
-//     digitalWrite(BOOSTER_LIGHTS,LOW);
-//     digitalWrite(RED_LIGHTS,HIGH);
-//     Serial.print("Throttle : ");
-//     Serial.println(received_data.throttle);
+void SystemDisconnected(void)
+{
+  tft.fillScreen(ST77XX_BLACK);
+  // Draw Thick Red X
+  int cx = SCREEN_W / 2;
+  int cy = 90;
+  int sz = 40;
+  for (int i = -5; i <= 5; i++)
+  {
+    tft.drawLine(cx - sz + i, cy - sz, cx + sz + i, cy + sz, ST77XX_RED);
+    tft.drawLine(cx + sz + i, cy - sz, cx - sz + i, cy + sz, ST77XX_RED);
+  }
 
-//   }
-//   else
-//   {
-//     motor.writeMicroseconds(1500); // stop the motor
-//     // Turn off the booster lights if it is on already
-//     // Turn off the red lights if it is on already
-//     digitalWrite(BOOSTER_LIGHTS,LOW);
-//     digitalWrite(RED_LIGHTS,LOW);
-//     Serial.print("Throttle : ");
-//     Serial.println(received_data.throttle);
-//   }
-  
-//   // Steering
-//   if(received_data.right_turn || received_data.left_turn)
-//   {
-//     servo.write(received_data.streeing);
+  tft.setTextColor(ST77XX_WHITE);
+  tft.setTextSize(2);
 
-//     if ((received_data.right_turn && (received_data.streeing > 115)) &&
-//               (received_data.digital_ch3 == HIGH))
-//     {
-//       ToggleRightIndicator();
-//     }
-//     else if(received_data.digital_ch3 == HIGH)
-//     {
-//       digitalWrite(RIGHT_INDICATOR, LOW);
-//     }
-//     if ((received_data.left_turn && (received_data.streeing < 65)) &&
-//             (received_data.digital_ch3 == HIGH))
-//     { 
-//       ToggleLeftIndicator();
-//     }
-//     // if all indicators blinking turned off 
-//     else if(received_data.digital_ch3 == HIGH)
-//     {
-//       digitalWrite(LEFT_INDICATOR, LOW);
-//     }
-//     Serial.print("Steering: ");
-//     Serial.println(received_data.streeing);
-//   }
-//   else
-//   {
-//     servo.write(received_data.streeing);
-//     Serial.print("Steering: ");
-//     Serial.println(received_data.streeing);
-//   }
-//   if(received_data.digital_ch1 == LOW)
-//   {
-//     digitalWrite(HEAD_LIGHTS,HIGH);
-//     Serial.print("Head Lights: ");
-//     Serial.println(received_data.digital_ch1);
+  // Thick "SYSTEM DISCONNECTED"
+  int tx = 45, ty = 170;
+  tft.setCursor(tx + 1, ty);
+  tft.print("SYSTEM DISCONNECTED");
+  tft.setCursor(tx, ty + 1);
+  tft.print("SYSTEM DISCONNECTED");
+  tft.setCursor(tx, ty);
+  tft.print("SYSTEM DISCONNECTED");
 
-//   }
-//   else
-//   {
-//     digitalWrite(HEAD_LIGHTS,LOW);
-//     Serial.print("Head Lights: ");
-//     Serial.println(received_data.digital_ch1);
-//   }
-//   // Toggling indicator lights
-//   if(received_data.digital_ch3 == LOW)
-//   {
-//     ToggleBothIndicators();
-//     Serial.print("Indicators state: ");
-//     Serial.println(received_data.digital_ch3);
+  tft.setCursor(65, 200);
+  tft.print("CHECK CONNECTION");
+}
 
-//   }
-//   else
-//   {
-//     digitalWrite(LEFT_INDICATOR,LOW);
-//     digitalWrite(RIGHT_INDICATOR,LOW);
-//     Serial.print("Indicators state: ");
-//     Serial.println(received_data.digital_ch3);
-//   }
+    // void Control(DataPacket received_data)
+    // {
+    //   // Throttle
+    //   if(received_data.forward && !(received_data.backward))
+    //   {
 
+    //     motor.writeMicroseconds(received_data.throttle);
+    //     // Setting up the Blue Lights
+    //     if(received_data.throttle > 1900)
+    //     {
+    //         digitalWrite(BOOSTER_LIGHTS,HIGH);
+    //     }
+    //     else
+    //     {
+    //         digitalWrite(BOOSTER_LIGHTS,LOW);
+    //     }
+    //     // Turn off the red lights if it is on already
+    //     digitalWrite(RED_LIGHTS,LOW);
+    //     Serial.print("Throttle : ");
+    //     Serial.println(received_data.throttle);
+    //   }
+    //   else if (!(received_data.forward) && received_data.backward)
+    //   {
 
+    //     motor.writeMicroseconds(received_data.throttle);
+    //     // Turn off the booster lights if it is on already
+    //     // Turn on the red lights
+    //     digitalWrite(BOOSTER_LIGHTS,LOW);
+    //     digitalWrite(RED_LIGHTS,HIGH);
+    //     Serial.print("Throttle : ");
+    //     Serial.println(received_data.throttle);
 
-// }
-// void ResetSystem(void)
-// {
- 
-//   motor.writeMicroseconds(1500); // stop the motor
+    //   }
+    //   else
+    //   {
+    //     motor.writeMicroseconds(1500); // stop the motor
+    //     // Turn off the booster lights if it is on already
+    //     // Turn off the red lights if it is on already
+    //     digitalWrite(BOOSTER_LIGHTS,LOW);
+    //     digitalWrite(RED_LIGHTS,LOW);
+    //     Serial.print("Throttle : ");
+    //     Serial.println(received_data.throttle);
+    //   }
 
-//   // Resetting steering
-//   servo.write(90);
+    //   // Steering
+    //   if(received_data.right_turn || received_data.left_turn)
+    //   {
+    //     servo.write(received_data.streeing);
 
-//   // Resetting all Lights
-//   digitalWrite(HEAD_LIGHTS,LOW);
-//   digitalWrite(BOOSTER_LIGHTS,LOW);
-//   digitalWrite(RED_LIGHTS,LOW);
-//   digitalWrite(LEFT_INDICATOR,LOW);
-//   digitalWrite(RIGHT_INDICATOR,LOW);
+    //     if ((received_data.right_turn && (received_data.streeing > 115)) &&
+    //               (received_data.digital_ch3 == HIGH))
+    //     {
+    //       ToggleRightIndicator();
+    //     }
+    //     else if(received_data.digital_ch3 == HIGH)
+    //     {
+    //       digitalWrite(RIGHT_INDICATOR, LOW);
+    //     }
+    //     if ((received_data.left_turn && (received_data.streeing < 65)) &&
+    //             (received_data.digital_ch3 == HIGH))
+    //     {
+    //       ToggleLeftIndicator();
+    //     }
+    //     // if all indicators blinking turned off
+    //     else if(received_data.digital_ch3 == HIGH)
+    //     {
+    //       digitalWrite(LEFT_INDICATOR, LOW);
+    //     }
+    //     Serial.print("Steering: ");
+    //     Serial.println(received_data.streeing);
+    //   }
+    //   else
+    //   {
+    //     servo.write(received_data.streeing);
+    //     Serial.print("Steering: ");
+    //     Serial.println(received_data.streeing);
+    //   }
+    //   if(received_data.digital_ch1 == LOW)
+    //   {
+    //     digitalWrite(HEAD_LIGHTS,HIGH);
+    //     Serial.print("Head Lights: ");
+    //     Serial.println(received_data.digital_ch1);
 
-// }
+    //   }
+    //   else
+    //   {
+    //     digitalWrite(HEAD_LIGHTS,LOW);
+    //     Serial.print("Head Lights: ");
+    //     Serial.println(received_data.digital_ch1);
+    //   }
+    //   // Toggling indicator lights
+    //   if(received_data.digital_ch3 == LOW)
+    //   {
+    //     ToggleBothIndicators();
+    //     Serial.print("Indicators state: ");
+    //     Serial.println(received_data.digital_ch3);
 
-// void ToggleLeftIndicator()
-// {
-//   digitalWrite(LEFT_INDICATOR,HIGH);
-//   delay(50);
-//   digitalWrite(LEFT_INDICATOR,LOW);
-//   delay(50);
-// }
+    //   }
+    //   else
+    //   {
+    //     digitalWrite(LEFT_INDICATOR,LOW);
+    //     digitalWrite(RIGHT_INDICATOR,LOW);
+    //     Serial.print("Indicators state: ");
+    //     Serial.println(received_data.digital_ch3);
+    //   }
 
-// void ToggleRightIndicator()
-// {
-//   digitalWrite(RIGHT_INDICATOR,HIGH);
-//   delay(50);
-//   digitalWrite(RIGHT_INDICATOR,LOW);
-//   delay(50);
-// }
+    // }
+    // void ResetSystem(void)
+    // {
 
-// void ToggleBothIndicators()
-// {
-//   digitalWrite(LEFT_INDICATOR,HIGH);
-//   digitalWrite(RIGHT_INDICATOR,HIGH);
-//   delay(50);
-//   digitalWrite(LEFT_INDICATOR,LOW);
-//   digitalWrite(RIGHT_INDICATOR,LOW);
-//   delay(50);
+    //   motor.writeMicroseconds(1500); // stop the motor
 
-// }
+    //   // Resetting steering
+    //   servo.write(90);
 
+    //   // Resetting all Lights
+    //   digitalWrite(HEAD_LIGHTS,LOW);
+    //   digitalWrite(BOOSTER_LIGHTS,LOW);
+    //   digitalWrite(RED_LIGHTS,LOW);
+    //   digitalWrite(LEFT_INDICATOR,LOW);
+    //   digitalWrite(RIGHT_INDICATOR,LOW);
 
+    // }
 
+    // void ToggleLeftIndicator()
+    // {
+    //   digitalWrite(LEFT_INDICATOR,HIGH);
+    //   delay(50);
+    //   digitalWrite(LEFT_INDICATOR,LOW);
+    //   delay(50);
+    // }
 
+    // void ToggleRightIndicator()
+    // {
+    //   digitalWrite(RIGHT_INDICATOR,HIGH);
+    //   delay(50);
+    //   digitalWrite(RIGHT_INDICATOR,LOW);
+    //   delay(50);
+    // }
+
+    // void ToggleBothIndicators()
+    // {
+    //   digitalWrite(LEFT_INDICATOR,HIGH);
+    //   digitalWrite(RIGHT_INDICATOR,HIGH);
+    //   delay(50);
+    //   digitalWrite(LEFT_INDICATOR,LOW);
+    //   digitalWrite(RIGHT_INDICATOR,LOW);
+    //   delay(50);
+
+    // }
