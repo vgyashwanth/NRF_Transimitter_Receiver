@@ -25,8 +25,8 @@ const byte address[6] = "00001";
 // Data packet
 struct DataPacket
 {
-  uint8_t tank1_depth;
-  uint8_t tank2_depth;
+  uint16_t tank1_depth;
+  uint16_t tank2_depth;
   float temperature;
   float humidity;
 };
