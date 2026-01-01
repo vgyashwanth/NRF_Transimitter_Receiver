@@ -102,9 +102,9 @@ uint8_t gtank1fillper = 0;
 uint8_t gtank2fillper = 0;
 
 // average the sensor values
-
-uint8_t gAvgBufferTank1[3] = {50, 50, 50};
-uint8_t gAvgBufferTank2[3] = {50, 50, 50};
+#define BUFFER_LENGTH 10
+uint8_t gAvgBufferTank1[BUFFER_LENGTH] = {50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
+uint8_t gAvgBufferTank2[BUFFER_LENGTH] = {50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
 
 uint8_t gTank1BufPtr = 0;
 uint8_t gTank2BufPtr = 0;
@@ -568,21 +568,29 @@ void ProcessDataDisplayit(struct DataPacket *data)
   gAvgBufferTank1[gTank1BufPtr++] = gtank1fillper;
   gAvgBufferTank2[gTank2BufPtr++] = gtank2fillper;
 
-  if (gTank1BufPtr == 3)
+  if (gTank1BufPtr == BUFFER_LENGTH)
   {
     // reset back to zero
     gTank1BufPtr = 0;
   }
 
-  if (gTank2BufPtr == 3)
+  if (gTank2BufPtr == BUFFER_LENGTH)
   {
     // reset back to zero
     gTank2BufPtr = 0;
   }
 
+  uint16_t tank1avg = 0;
+  uint16_t tank2avg = 0;
   // Average the values;
-  gtank1fillper = (gAvgBufferTank1[0] + gAvgBufferTank1[1] + gAvgBufferTank1[2]) / (uint8_t)3;
-  gtank2fillper = (gAvgBufferTank2[0] + gAvgBufferTank2[1] + gAvgBufferTank2[2]) / (uint8_t)3;
+  for (uint8_t i = 0; i < BUFFER_LENGTH; i++)
+  {
+    tank1avg += gAvgBufferTank1[i];
+    tank2avg += gAvgBufferTank2[i];
+  }
+  // Store the final result
+  gtank1fillper = (tank1avg) / (uint8_t)BUFFER_LENGTH;
+  gtank2fillper = (tank2avg) / (uint8_t)BUFFER_LENGTH;
 
   if ((gtank1fillper > 100) && (gtank2fillper <= 100))
   {
