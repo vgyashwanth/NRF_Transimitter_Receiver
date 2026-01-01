@@ -54,6 +54,8 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #define LAYOUT_SETUP 0
 #define UPDATE_VALUE 1
 
+#define NRF_MAX_COUNT 500
+
 // --- FUNCTION PROTOTYPES ---
 void SetUpTftDisplayLayout(void);
 void drawHeader(const char *title);
@@ -98,6 +100,14 @@ bool gChangeSystemVar = 0;
 
 uint8_t gtank1fillper = 0;
 uint8_t gtank2fillper = 0;
+
+// average the sensor values
+
+uint8_t gAvgBufferTank1[3] = {50, 50, 50};
+uint8_t gAvgBufferTank2[3] = {50, 50, 50};
+
+uint8_t gTank1BufPtr = 0;
+uint8_t gTank2BufPtr = 0;
 
 // Used to receive the data
 struct DataPacket received_data;
@@ -231,7 +241,7 @@ void SystemConnected(void)
     }
 
     // if NRF Disconnected for long while then change the state
-    if (NRFDisconCount > 100)
+    if (NRFDisconCount > NRF_MAX_COUNT)
     {
       // Change the State
       gNextState = System_DisConnected;
@@ -394,18 +404,22 @@ void SystemUpdateTrim(void)
     // Update the Layout with respect to tank here
     uint16_t Trim = EEPROM.get(5 * tank, Trim);
 
-    // Print TANK-1 or TANK-2 based on selection
-
-    Serial.println("System is in Update Trim state");
+    delay(1000);
+    while (!(radio.available()))
+    {
+      // stay here
+      Serial.println("NRF Data is not available");
+    }
     drawTankTrimView(tank, received_data.tank1_depth, Trim, LAYOUT_SETUP);
     delay(1000);
-    while ((radio.available() && gChangeTrim))
+    while ((gChangeTrim))
     {
 
       if (radio.available())
       {
         radio.read(&received_data, sizeof(DataPacket));
         NRFDisconCount = 0;
+        Serial.println("NRF Connected");
       }
       else
       {
@@ -414,7 +428,7 @@ void SystemUpdateTrim(void)
       }
 
       // if NRF Disconnected for long while then change the state
-      if (NRFDisconCount > 100)
+      if (NRFDisconCount > NRF_MAX_COUNT)
       {
         // Change the State
         gNextState = System_DisConnected;
@@ -479,12 +493,13 @@ void SystemUpdateTrim(void)
   }
 
   tone(ALARM, 1500, 2000);
-  // If the nrf disconnected
-  if (!radio.available())
-  {
-    gNextState = System_DisConnected;
-  }
-  else
+  // // If the nrf disconnected
+  // if (!radio.available())
+  // {
+  //   gNextState = System_DisConnected;
+  // }
+  // else
+  // Not required
   {
     gNextState = System_Connected;
   }
@@ -545,24 +560,56 @@ void ProcessDataDisplayit(struct DataPacket *data)
 
   uint16_t Tank1Trim = EEPROM.get(5 * 1, Tank1Trim);
   uint16_t Tank2Trim = EEPROM.get(5 * 2, Tank2Trim);
-
+  // Tank1Trim - 10 , 10 is the sensor output when tanks will get completely fill
   gtank1fillper = map((Tank1Trim - data->tank1_depth), 0, (Tank1Trim - 10), 0, 100);
 
   gtank2fillper = map((Tank2Trim - data->tank2_depth), 0, (Tank2Trim - 10), 0, 100);
 
-  if (gtank2fillper > 100 || gtank1fillper > 100)
+  gAvgBufferTank1[gTank1BufPtr++] = gtank1fillper;
+  gAvgBufferTank2[gTank2BufPtr++] = gtank2fillper;
+
+  if (gTank1BufPtr == 3)
   {
-    // Dont process the incorrect values Just process the temperatur alone
-    // and Initialize the global variables with some safe values instead of Zero, So you wont get any incorrect alarm
-    gtank1fillper = 50;
-    gtank2fillper = 50;
-    Temperature(data->temperature, UPDATE_VALUE);
-    return;
+    // reset back to zero
+    gTank1BufPtr = 0;
   }
 
-  TankLevel(1, gtank1fillper, UPDATE_VALUE);
-  TankLevel(2, gtank2fillper, UPDATE_VALUE);
-  Temperature(data->temperature, UPDATE_VALUE);
+  if (gTank2BufPtr == 3)
+  {
+    // reset back to zero
+    gTank2BufPtr = 0;
+  }
+
+  // Average the values;
+  gtank1fillper = (gAvgBufferTank1[0] + gAvgBufferTank1[1] + gAvgBufferTank1[2]) / (uint8_t)3;
+  gtank2fillper = (gAvgBufferTank2[0] + gAvgBufferTank2[1] + gAvgBufferTank2[2]) / (uint8_t)3;
+
+  if ((gtank1fillper > 100) && (gtank2fillper <= 100))
+  {
+    TankLevel(2, gtank2fillper, UPDATE_VALUE);
+    Temperature(data->temperature, UPDATE_VALUE);
+    // Initialize the global variables with some safe values instead of Zero, So you wont get any incorrect alarm
+    gtank1fillper = 50;
+  }
+  else if ((gtank2fillper > 100) && (gtank1fillper <= 100))
+  {
+
+    TankLevel(1, gtank1fillper, UPDATE_VALUE);
+    Temperature(data->temperature, UPDATE_VALUE);
+    gtank2fillper = 50;
+  }
+  else if ((gtank2fillper > 100) && (gtank1fillper > 100))
+  {
+    Temperature(data->temperature, UPDATE_VALUE);
+    gtank1fillper = 50;
+    gtank2fillper = 50;
+  }
+  else
+  {
+    TankLevel(1, gtank1fillper, UPDATE_VALUE);
+    TankLevel(2, gtank2fillper, UPDATE_VALUE);
+    Temperature(data->temperature, UPDATE_VALUE);
+  }
 }
 
 void TurnOnAlarm(uint8_t tank1fillper, uint8_t tank2fillper)
