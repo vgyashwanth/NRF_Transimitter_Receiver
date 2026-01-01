@@ -103,8 +103,9 @@ uint8_t gtank2fillper = 0;
 
 // average the sensor values
 #define BUFFER_LENGTH 10
-uint8_t gAvgBufferTank1[BUFFER_LENGTH] = {50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
-uint8_t gAvgBufferTank2[BUFFER_LENGTH] = {50, 50, 50, 50, 50, 50, 50, 50, 50, 50};
+uint8_t gAvgBufferTank1[BUFFER_LENGTH] = {0};
+uint8_t gAvgBufferTank2[BUFFER_LENGTH] = {0};
+bool IsDevicePowerUPFirstTime = 0;
 
 uint8_t gTank1BufPtr = 0;
 uint8_t gTank2BufPtr = 0;
@@ -221,6 +222,29 @@ void SystemConnected(void)
   tft.fillScreen(ST77XX_BLACK);
   SetUpTftDisplayLayout();
 
+  // Store the AvgBuffer with the current Sensor value data
+  while (!(radio.available()))
+  {
+    // stay here until the system doesn't get any data;
+  }
+  // if the system connected
+  radio.read(&received_data, sizeof(DataPacket));
+
+  uint16_t Tank1Trim = EEPROM.get(5 * 1, Tank1Trim);
+  uint16_t Tank2Trim = EEPROM.get(5 * 2, Tank2Trim);
+  // Tank1Trim - 10 , 10 is the sensor output when tanks will get completely fill
+  uint8_t tank1_depth = map((Tank1Trim - received_data.tank1_depth), 0, (Tank1Trim - 10), 0, 100);
+
+  uint8_t tank2_depth = map((Tank2Trim - received_data.tank2_depth), 0, (Tank2Trim - 10), 0, 100);
+
+  for (uint8_t i = 0; i < BUFFER_LENGTH; i++)
+  {
+    // fill the buffer
+    gAvgBufferTank1[i] = tank1_depth;
+    gAvgBufferTank2[i] = tank2_depth;
+    Serial.println("Filling the Buffer");
+  }
+
   // Variable to Count the disconnect of nrf
   uint8_t NRFDisconCount = 0x00;
 
@@ -257,7 +281,7 @@ void SystemConnected(void)
 
     // Take the Thresholds
     // Add some error here so that we can avoid some sensor flucations
-    uint8_t sensor_error = 3;
+    uint8_t sensor_error = 5;
     uint8_t tank1upthres = (EEPROM.get(1, tank1upthres) - sensor_error);
     uint8_t tank1lowthres = (EEPROM.get(3, tank1lowthres) + sensor_error);
 
