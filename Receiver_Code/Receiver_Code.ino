@@ -55,6 +55,7 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #define UPDATE_VALUE 1
 
 #define NRF_MAX_COUNT 500
+#define TANK_OFFSET 20
 
 // --- FUNCTION PROTOTYPES ---
 void SetUpTftDisplayLayout(void);
@@ -233,9 +234,9 @@ void SystemConnected(void)
   uint16_t Tank1Trim = EEPROM.get(5 * 1, Tank1Trim);
   uint16_t Tank2Trim = EEPROM.get(5 * 2, Tank2Trim);
   // Tank1Trim - 10 , 10 is the sensor output when tanks will get completely fill
-  uint8_t tank1_depth = map((Tank1Trim - received_data.tank1_depth), 0, (Tank1Trim - 10), 0, 100);
+  uint8_t tank1_depth = map((Tank1Trim - received_data.tank1_depth), 0, (Tank1Trim - TANK_OFFSET), 0, 100);
 
-  uint8_t tank2_depth = map((Tank2Trim - received_data.tank2_depth), 0, (Tank2Trim - 10), 0, 100);
+  uint8_t tank2_depth = map((Tank2Trim - received_data.tank2_depth), 0, (Tank2Trim - TANK_OFFSET), 0, 100);
 
   for (uint8_t i = 0; i < BUFFER_LENGTH; i++)
   {
@@ -585,9 +586,9 @@ void ProcessDataDisplayit(struct DataPacket *data)
   uint16_t Tank1Trim = EEPROM.get(5 * 1, Tank1Trim);
   uint16_t Tank2Trim = EEPROM.get(5 * 2, Tank2Trim);
   // Tank1Trim - 10 , 10 is the sensor output when tanks will get completely fill
-  gtank1fillper = map((Tank1Trim - data->tank1_depth), 0, (Tank1Trim - 10), 0, 100);
+  gtank1fillper = map((Tank1Trim - data->tank1_depth), 0, (Tank1Trim - TANK_OFFSET), 0, 100);
 
-  gtank2fillper = map((Tank2Trim - data->tank2_depth), 0, (Tank2Trim - 10), 0, 100);
+  gtank2fillper = map((Tank2Trim - data->tank2_depth), 0, (Tank2Trim - TANK_OFFSET), 0, 100);
 
   gAvgBufferTank1[gTank1BufPtr++] = gtank1fillper;
   gAvgBufferTank2[gTank2BufPtr++] = gtank2fillper;
