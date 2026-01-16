@@ -138,6 +138,11 @@ uint16_t MeasureDepthInCm(bool tank)
     depthInCm = t2_tempval2;
   }
 
+  Serial.print("Tank : ");
+  Serial.println(tank);
+  Serial.print("Depth");
+  Serial.println(depthInCm);
+
   return depthInCm;
 }
 
