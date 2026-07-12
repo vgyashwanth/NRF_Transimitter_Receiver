@@ -27,7 +27,9 @@ Servo motor;  // for controlling the esc of the motor
 #define PARKING_LIGHT_BLINK_TIME 250 // msec
 #define INDICATOR_DELAY          100 // msec  
 #define BOOSTER_LIGHT_TOOGLE_TIME 50 // msec
-
+#define STEERING_MIN_ANGLE 45 // degree
+#define STEERING_MAX_ANGLE 135 // degree
+ 
 // Ticker to create the Tasks
 void ToggleBoosterLight(void);
 void parkingLights_ISR(void);
@@ -186,7 +188,14 @@ void Control(DataPacket received_data)
   
   // Steering
   if(received_data.right_turn || received_data.left_turn)
-  {
+  { 
+    if((received_data.streeing < STEERING_MIN_ANGLE) || (received_data.streeing > STEERING_MAX_ANGLE))
+    {
+      // invalid angle
+      // dont process further
+      // important to avoid servo damage
+      return ;
+    }
     servo.write(received_data.streeing);
 
     if ((received_data.right_turn && (received_data.streeing > 110)) &&
