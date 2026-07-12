@@ -87,11 +87,13 @@ void ProcessData(DataPacket* data)
     uint16_t AnalogValA6 = analogRead(THROTTLE);
     uint16_t AnalogValA7 = analogRead(STEERING);
     uint16_t AnalogValA5 = analogRead(HEAD_POT);
+    uint16_t toptrimpot  = analogRead(TOP_TRIM_POT);
+    uint16_t downtrimpot = analogRead(DOWN_TRIM_POT);
     bool DigitalValCH1 = digitalRead(DIGITAL_CH1);
+    bool DigitalValCH2 = digitalRead(DIGITAL_CH2);
     bool DigitalValCH3 = digitalRead(DIGITAL_CH3);
+    bool DigitalValCH4 = digitalRead(DIGITAL_CH4);
 
-    
-    
     // Throttle
     if(AnalogValA6 < 287)
     {
@@ -152,13 +154,9 @@ void ProcessData(DataPacket* data)
     }
 
     data->digital_ch1 = DigitalValCH1;
+    data->digital_ch2 = DigitalValCH2;
     data->digital_ch3 = DigitalValCH3;
-
-    
-    
-  
+    data->digital_ch4 = DigitalValCH4;
+    data->down_trim_pot = downtrimpot;
+    data->top_trim_pot = toptrimpot;
 }
-
-
-
-

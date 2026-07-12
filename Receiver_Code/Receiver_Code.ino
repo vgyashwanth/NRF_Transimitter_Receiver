@@ -4,12 +4,14 @@
 #include <RF24.h>
 #include <stdint.h>
 #include <Servo.h>
+#include <Ticker.h>
 
 #define CE_PIN         2
 #define CSN_PIN        4
 
 #define MOTOR_PIN       3
 #define SERVO_PIN      10
+#define HORN_PIN       9
 #define HEAD_LIGHTS    A0
 #define BOOSTER_LIGHTS A1
 #define RED_LIGHTS     A2
@@ -19,9 +21,32 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 Servo servo;  // create servo object to control a servo
 Servo motor;  // for controlling the esc of the motor
 
+// frequency
+#define HORN_FREQUENCY 250 // frequency of the  Horn in Hz (McLaren 765LT)
+#define PARKING_LIGHT_FREQ 2480
+#define PARKING_LIGHT_BLINK_TIME 250 // msec
+#define INDICATOR_DELAY          100 // msec  
+#define BOOSTER_LIGHT_TOOGLE_TIME 50 // msec
+
+// Ticker to create the Tasks
+void ToggleBoosterLight(void);
+void parkingLights_ISR(void);
+void LeftIndicator_ISR(void);
+void RightIndicator_ISR(void);
+// To this:
+// Arguments: callback function, interval, repeating times (0 = endless), resolution (MILLIS)
+Ticker parkingLightTicker(parkingLights_ISR, PARKING_LIGHT_BLINK_TIME, 0, MILLIS); 
+Ticker BoosterLightTicker(ToggleBoosterLight, BOOSTER_LIGHT_TOOGLE_TIME, 0, MILLIS);
+Ticker LeftIndicatorTicker(LeftIndicator_ISR, INDICATOR_DELAY, 0, MILLIS);
+Ticker RightIndicatorTicker(RightIndicator_ISR, INDICATOR_DELAY, 0, MILLIS);
+volatile bool isParkingLightTickerActive = false;
+volatile bool isBoosterLightTurnOnFirstTime = false;
+volatile bool isLeftIndicatorActive = false;
+volatile bool isRightIndicatorActive = false;
+uint8_t gBoosterLightToggleCounter = 0;
+
+
 const byte address[6] = "00001";
-volatile bool left_indicator_state = 0;
-volatile bool right_indicator_state = 0;
 
 //Data packet
 struct DataPacket
@@ -43,9 +68,6 @@ struct DataPacket
 
 void Control(DataPacket received_data);
 void ResetSystem(void);
-void ToggleLeftIndicator();
-void ToggleRightIndicator();
-void ToggleBothIndicators();
 void setup() {
   Serial.begin(9600);
   // NRF Module Settings
@@ -78,7 +100,12 @@ void setup() {
 
 void loop()
 {
-  
+
+  parkingLightTicker.update(); // Keeps tracking timer 1
+  BoosterLightTicker.update(); // Keeps tracking timer 2
+  LeftIndicatorTicker.update();
+  RightIndicatorTicker.update();
+
   DataPacket data;
   if (radio.available()) 
   {
@@ -102,14 +129,33 @@ void Control(DataPacket received_data)
     // Setting up the Blue Lights
     if(received_data.throttle > 1900)
     {
-        digitalWrite(BOOSTER_LIGHTS,HIGH);
+        #define TOOGLE_COUNTER_MAX 25
+        if(isBoosterLightTurnOnFirstTime == false)
+        {
+          BoosterLightTicker.start();
+          isBoosterLightTurnOnFirstTime = true;
+        }
+        else if(gBoosterLightToggleCounter > TOOGLE_COUNTER_MAX)
+        {
+          BoosterLightTicker.stop();
+          digitalWrite(BOOSTER_LIGHTS, HIGH);
+        }
+        else
+        {
+          // Nothing to do
+        }
     }
     else
-    {
+    {   
         digitalWrite(BOOSTER_LIGHTS,LOW);
+        isBoosterLightTurnOnFirstTime = false;
+        gBoosterLightToggleCounter = 0;  
     }
-    // Turn off the red lights if it is on already
-    digitalWrite(RED_LIGHTS,LOW);
+    // Turn off the red lights if it is on already only if it is not turned on
+    if(received_data.digital_ch2 == HIGH)
+    {
+      digitalWrite(RED_LIGHTS,LOW);
+    }
     Serial.print("Throttle : ");
     Serial.println(received_data.throttle);
   }
@@ -130,8 +176,10 @@ void Control(DataPacket received_data)
     motor.writeMicroseconds(1500); // stop the motor
     // Turn off the booster lights if it is on already
     // Turn off the red lights if it is on already
+    BoosterLightTicker.stop();
+    isBoosterLightTurnOnFirstTime = false;
+    gBoosterLightToggleCounter = 0;  
     digitalWrite(BOOSTER_LIGHTS,LOW);
-    digitalWrite(RED_LIGHTS,LOW);
     Serial.print("Throttle : ");
     Serial.println(received_data.throttle);
   }
@@ -141,63 +189,100 @@ void Control(DataPacket received_data)
   {
     servo.write(received_data.streeing);
 
-    if ((received_data.right_turn && (received_data.streeing > 115)) &&
+    if ((received_data.right_turn && (received_data.streeing > 110)) &&
               (received_data.digital_ch3 == HIGH))
-    {
-      ToggleRightIndicator();
+    { 
+      if(isRightIndicatorActive == false)
+      {
+        // Turn off the left indicator
+        LeftIndicatorTicker.stop();
+        isLeftIndicatorActive = false;
+        RightIndicatorTicker.start();
+      }
+      isRightIndicatorActive = true;
     }
-    else if(received_data.digital_ch3 == HIGH)
-    {
-      digitalWrite(RIGHT_INDICATOR, LOW);
-    }
-    if ((received_data.left_turn && (received_data.streeing < 65)) &&
+    if ((received_data.left_turn && (received_data.streeing < 70)) &&
             (received_data.digital_ch3 == HIGH))
     { 
-      ToggleLeftIndicator();
-    }
-    // if all indicators blinking turned off 
-    else if(received_data.digital_ch3 == HIGH)
-    {
-      digitalWrite(LEFT_INDICATOR, LOW);
+      if(isLeftIndicatorActive == false)
+      {
+        LeftIndicatorTicker.start();
+        // Turn off the right indicator
+        RightIndicatorTicker.stop();
+        isRightIndicatorActive = false;
+      }
+      isLeftIndicatorActive = true;
     }
     Serial.print("Steering: ");
     Serial.println(received_data.streeing);
   }
   else
-  {
+  { 
+    LeftIndicatorTicker.stop();
+    RightIndicatorTicker.stop();
+    isLeftIndicatorActive = false;
+    isRightIndicatorActive = false;
     servo.write(received_data.streeing);
     Serial.print("Steering: ");
     Serial.println(received_data.streeing);
   }
-  if(received_data.digital_ch1 == LOW)
+  // Head Lights
+  if(received_data.digital_ch1 == LOW && received_data.digital_ch2 == HIGH)
   {
     digitalWrite(HEAD_LIGHTS,HIGH);
     Serial.print("Head Lights: ");
     Serial.println(received_data.digital_ch1);
+    Serial.println(received_data.digital_ch2);
 
   }
-  else
+  else if(received_data.digital_ch1 == HIGH && received_data.digital_ch2 == LOW)
   {
-    digitalWrite(HEAD_LIGHTS,LOW);
+    digitalWrite(HEAD_LIGHTS,HIGH);
+    digitalWrite(RED_LIGHTS, HIGH);
     Serial.print("Head Lights: ");
     Serial.println(received_data.digital_ch1);
+    Serial.println(received_data.digital_ch2);
   }
-  // Toggling indicator lights
-  if(received_data.digital_ch3 == LOW)
+  else 
   {
-    ToggleBothIndicators();
-    Serial.print("Indicators state: ");
-    Serial.println(received_data.digital_ch3);
+    digitalWrite(HEAD_LIGHTS,LOW);
+    // if the car is coming back, then we should keep the red light on
+    if(!(received_data.backward))
+    {
+      digitalWrite(RED_LIGHTS, LOW);
+    }
+    Serial.print("Head Lights: ");
+    Serial.println(received_data.digital_ch1);
+    Serial.println(received_data.digital_ch2);
+  }
+
+  // process the horn
+  if(received_data.digital_ch4 == LOW && received_data.digital_ch3 == HIGH)
+  {
+    tone(HORN_PIN, HORN_FREQUENCY, 100);
+  }
+  else 
+  {  
+    noTone(HORN_PIN);
+  }
+
+    // process the parking lights
+  if(received_data.digital_ch4 == HIGH && received_data.digital_ch3 == LOW)
+  {
+    if(isParkingLightTickerActive == false)
+    {
+      parkingLightTicker.start();
+      isParkingLightTickerActive = true;
+    }
 
   }
   else
   {
-    digitalWrite(LEFT_INDICATOR,LOW);
-    digitalWrite(RIGHT_INDICATOR,LOW);
-    Serial.print("Indicators state: ");
-    Serial.println(received_data.digital_ch3);
+      parkingLightTicker.stop();
+      isParkingLightTickerActive = false;
+      digitalWrite(LEFT_INDICATOR, LOW);
+      digitalWrite(RIGHT_INDICATOR, LOW);
   }
-
 
 
 }
@@ -218,32 +303,74 @@ void ResetSystem(void)
 
 }
 
-void ToggleLeftIndicator()
+void parkingLights_ISR()
 {
-  digitalWrite(LEFT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(LEFT_INDICATOR,LOW);
-  delay(50);
-}
+    // blink the parking lights with tone,
+    static bool state = 0;
+    state = state^1; // do the xor to flip the state
+    digitalWrite(LEFT_INDICATOR, state);
+    digitalWrite(RIGHT_INDICATOR, state);
 
-void ToggleRightIndicator()
-{
-  digitalWrite(RIGHT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(RIGHT_INDICATOR,LOW);
-  delay(50);
-}
+    if(state)
+    {
+      tone(HORN_PIN, PARKING_LIGHT_FREQ, 1000);
+    }
+    else
+    {
+      noTone(HORN_PIN);
+    }
 
-void ToggleBothIndicators()
-{
-  digitalWrite(LEFT_INDICATOR,HIGH);
-  digitalWrite(RIGHT_INDICATOR,HIGH);
-  delay(50);
-  digitalWrite(LEFT_INDICATOR,LOW);
-  digitalWrite(RIGHT_INDICATOR,LOW);
-  delay(50);
 
 }
+
+void ToggleBoosterLight(void)
+{
+  static bool state = 0;
+  state ^=1;
+  digitalWrite(BOOSTER_LIGHTS,state);
+  gBoosterLightToggleCounter++;
+
+}
+
+void LeftIndicator_ISR(void)
+{
+
+    // blink the parking lights with tone,
+    static bool leftindicatorstate = 0;
+    leftindicatorstate = leftindicatorstate^1; // do the xor to flip the state
+    digitalWrite(LEFT_INDICATOR, leftindicatorstate);
+
+    if(leftindicatorstate)
+    {
+      tone(HORN_PIN, PARKING_LIGHT_FREQ, 1000);
+    }
+    else
+    {
+      noTone(HORN_PIN);
+    }
+
+}
+
+void RightIndicator_ISR(void)
+{
+
+    // blink the parking lights with tone,
+    static bool rightindicatorstate = 0;
+    rightindicatorstate = rightindicatorstate^1; // do the xor to flip the state
+    digitalWrite(RIGHT_INDICATOR, rightindicatorstate);
+
+    if(rightindicatorstate)
+    {
+      tone(HORN_PIN, PARKING_LIGHT_FREQ, 1000);
+    }
+    else
+    {
+      noTone(HORN_PIN);
+    }
+
+}
+
+
 
 
 
