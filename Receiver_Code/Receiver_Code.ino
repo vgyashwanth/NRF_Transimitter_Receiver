@@ -22,13 +22,15 @@ Servo servo;  // create servo object to control a servo
 Servo motor;  // for controlling the esc of the motor
 
 // frequency
-#define HORN_FREQUENCY 250 // frequency of the  Horn in Hz (McLaren 765LT)
-#define PARKING_LIGHT_FREQ 2480
+#define HORN_FREQUENCY 300 // frequency of the  Horn in Hz (McLaren 765LT)
+#define PARKING_LIGHT_FREQ 2700
 #define PARKING_LIGHT_BLINK_TIME 250 // msec
 #define INDICATOR_DELAY          100 // msec  
 #define BOOSTER_LIGHT_TOOGLE_TIME 50 // msec
+#define TOOGLE_COUNTER_MAX 25
 #define STEERING_MIN_ANGLE 45 // degree
 #define STEERING_MAX_ANGLE 135 // degree
+#define BOOSTER_LIGHT_MAX_THROTTLE 1800
  
 // Ticker to create the Tasks
 void ToggleBoosterLight(void);
@@ -122,16 +124,68 @@ void loop()
 }
 
 void Control(DataPacket received_data)
-{
+{ 
+
+  // Steering
+  if(received_data.right_turn || received_data.left_turn)
+  { 
+    if((received_data.streeing < STEERING_MIN_ANGLE) || (received_data.streeing > STEERING_MAX_ANGLE))
+    {
+      // invalid angle
+      // dont process further
+      // important to avoid servo damage
+      return ;
+    }
+    servo.write(received_data.streeing);
+
+    if ((received_data.right_turn && (received_data.streeing > 110)) &&
+              (received_data.digital_ch3 == HIGH))
+    { 
+      if(isRightIndicatorActive == false)
+      {
+        // Turn off the left indicator
+        LeftIndicatorTicker.stop();
+        isLeftIndicatorActive = false;
+        RightIndicatorTicker.start();
+      }
+      isRightIndicatorActive = true;
+    }
+    if ((received_data.left_turn && (received_data.streeing < 70)) &&
+            (received_data.digital_ch3 == HIGH))
+    { 
+      if(isLeftIndicatorActive == false)
+      {
+        LeftIndicatorTicker.start();
+        // Turn off the right indicator
+        RightIndicatorTicker.stop();
+        isRightIndicatorActive = false;
+      }
+      isLeftIndicatorActive = true;
+    }
+    Serial.print("Steering: ");
+    Serial.println(received_data.streeing);
+  }
+  else
+  { 
+    LeftIndicatorTicker.stop();
+    RightIndicatorTicker.stop();
+    isLeftIndicatorActive = false;
+    isRightIndicatorActive = false;
+    servo.write(received_data.streeing);
+    Serial.print("Steering: ");
+    Serial.println(received_data.streeing);
+  }
+
+
   // Throttle
   if(received_data.forward && !(received_data.backward))
   {
   
     motor.writeMicroseconds(received_data.throttle);
     // Setting up the Blue Lights
-    if(received_data.throttle > 1900)
+    if(received_data.throttle > BOOSTER_LIGHT_MAX_THROTTLE)
     {
-        #define TOOGLE_COUNTER_MAX 25
+        
         if(isBoosterLightTurnOnFirstTime == false)
         {
           BoosterLightTicker.start();
@@ -186,55 +240,6 @@ void Control(DataPacket received_data)
     Serial.println(received_data.throttle);
   }
   
-  // Steering
-  if(received_data.right_turn || received_data.left_turn)
-  { 
-    if((received_data.streeing < STEERING_MIN_ANGLE) || (received_data.streeing > STEERING_MAX_ANGLE))
-    {
-      // invalid angle
-      // dont process further
-      // important to avoid servo damage
-      return ;
-    }
-    servo.write(received_data.streeing);
-
-    if ((received_data.right_turn && (received_data.streeing > 110)) &&
-              (received_data.digital_ch3 == HIGH))
-    { 
-      if(isRightIndicatorActive == false)
-      {
-        // Turn off the left indicator
-        LeftIndicatorTicker.stop();
-        isLeftIndicatorActive = false;
-        RightIndicatorTicker.start();
-      }
-      isRightIndicatorActive = true;
-    }
-    if ((received_data.left_turn && (received_data.streeing < 70)) &&
-            (received_data.digital_ch3 == HIGH))
-    { 
-      if(isLeftIndicatorActive == false)
-      {
-        LeftIndicatorTicker.start();
-        // Turn off the right indicator
-        RightIndicatorTicker.stop();
-        isRightIndicatorActive = false;
-      }
-      isLeftIndicatorActive = true;
-    }
-    Serial.print("Steering: ");
-    Serial.println(received_data.streeing);
-  }
-  else
-  { 
-    LeftIndicatorTicker.stop();
-    RightIndicatorTicker.stop();
-    isLeftIndicatorActive = false;
-    isRightIndicatorActive = false;
-    servo.write(received_data.streeing);
-    Serial.print("Steering: ");
-    Serial.println(received_data.streeing);
-  }
   // Head Lights
   if(received_data.digital_ch1 == LOW && received_data.digital_ch2 == HIGH)
   {
