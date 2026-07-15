@@ -101,7 +101,7 @@ void ProcessData(DataPacket* data)
       data->backward = false;
       data->throttle = (uint16_t)(map(AnalogValA6,155, 287, 2000, 1500));
     }
-    else if(AnalogValA6 > 295)
+    else if(AnalogValA6 > 297)
     {
       data->forward = false;
       data->backward = true;

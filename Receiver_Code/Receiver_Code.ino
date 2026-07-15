@@ -236,6 +236,10 @@ void Control(DataPacket received_data)
     isBoosterLightTurnOnFirstTime = false;
     gBoosterLightToggleCounter = 0;  
     digitalWrite(BOOSTER_LIGHTS,LOW);
+    if(received_data.digital_ch2 == HIGH)
+    {
+      digitalWrite(RED_LIGHTS, LOW);
+    }
     Serial.print("Throttle : ");
     Serial.println(received_data.throttle);
   }
