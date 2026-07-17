@@ -59,7 +59,8 @@ void setup()
   radio.setChannel(100); 
   radio.setDataRate(RF24_250KBPS);
   radio.openWritingPipe(address);
-  radio.setPALevel(RF24_PA_MIN);
+  radio.setPALevel(RF24_PA_MAX,1);
+  radio.powerUp();
   radio.setPayloadSize(sizeof(DataPacket));
   radio.stopListening();
 
